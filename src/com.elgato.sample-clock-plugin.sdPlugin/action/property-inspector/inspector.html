@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+
+<head>
+    <title>Sample Clock PI</title>
+    <meta charset="utf-8" />
+
+    <link rel="stylesheet" href="../../libs/css/sdpi.css">
+    <style type="text/css">
+        body,
+        html {
+            background-color: 'red';
+        }
+
+        .zones .sdpi-item {
+            margin-top: 0px;
+            min-height: 20px;
+        }
+
+        .zones .sdpi-item-label {
+            line-height: 20px;
+        }
+
+        .zones .sdpi-item-child {
+            margin-top: 0px;
+        }
+
+        .zones .sdpi-item-value:last-child {
+            margin-bottom: 0px;
+        }
+
+        .zones .sdpi-item-value> :last-of-type,
+        .sdpi-item-value:last-child {
+            margin-bottom: 0px;
+        }
+
+
+        .zones .sdpi-item>*:not(.sdpi-item-label.empty):not(meter) {
+            min-height: 20px;
+        }
+
+        smaller,
+        .state {
+            color: #999;
+        }
+
+        .smaller {
+            font-weight: normal;
+            font-size: 0.8em;
+        }
+
+        .button-inside {
+            margin-left: 20px;
+            margin-top: 6px;
+            font-size: 9pt;
+            font-weight: normal;
+            border-radius: 5px;
+            border-color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sdpi-wrapper hidden">
+        <hr />
+        <div type="checkbox" class="sdpi-item" id="multi-items">
+            <div class="sdpi-item-label">Settings</div>
+            <div class="sdpi-item-value min100">
+                <div class="sdpi-item-child">
+                    <input id="longDateAndTime" type="checkbox">
+                    <label for="longDateAndTime" class="sdpi-item-label">
+                        <span></span>Long Time
+                    </label>
+                </div>
+
+                <div class="sdpi-item-child">
+                    <input id="hour12" type="checkbox">
+                    <label for="hour12" class="sdpi-item-label">
+                        <span></span>AM/PM
+                    </label>
+                </div>
+
+            </div>
+        </div>
+
+        <hr />
+        <div class="zones" id="zones"></div>
+        <hr />
+
+        <!-- <div class="sdpi-item">
+            <div class="sdpi-item-label">Select</div>
+            <select id="locations" class="sdpi-item-value select">
+         </select>
+        </div> -->
+
+        <!-- <div class="sdpi-item">
+            <div class="sdpi-item-label">More</div>
+            <button id="win" class="sdpi-item-value win" onclick="openWindow()">Open</button>
+        </div> -->
+
+
+    </div>
+
+    <script src="../../libs/js/constants.js"></script>
+    <script src="../../libs/js/events.js"></script>
+    <script src="../../libs/js/api.js"></script>
+    <script src="../../libs/js/property-inspector.js"></script>
+    <script src="../../libs/js/dynamic-styles.js"></script>
+
+    <script>
+        let $EXTERNALWINDOW = null;
+        let MSETTINGS = {
+            locations: ["America/Anchorage"]
+        };
+        const timeLocations = [
+            "America/New_York",
+            "America/Chicago",
+            "America/Denver",
+            "America/Los_Angeles",
+            "America/Anchorage",
+            "Asia/Jerusalem",
+            "Asia/Kabul",
+            "Asia/Shanghai",
+            "Asia/Tokyo",
+            "Europe/London",
+            "Europe/Berlin",
+            "Europe/Kiev",
+            "Australia/Sydney",
+            "Australia/Perth",
+            "Australia/Darwin",
+            "Pacific/Honolulu",
+
+        ];
+
+        function openWindow() {
+            if(!$EXTERNALWINDOW || $EXTERNALWINDOW.closed) {
+                $EXTERNALWINDOW = window.open('locationPicker.html');
+                $EXTERNALWINDOW.XSETTINGS = MSETTINGS;
+                $EXTERNALWINDOW.postMessage(MSETTINGS, '*');
+            }
+        }
+
+        function changed(e) {
+            const zonesEl = document.getElementById('zones');
+            MSETTINGS.locations = [];
+            zonesEl.querySelectorAll(`input[type="checkbox"]`).forEach((el) => {
+                if(el.checked) {
+                    MSETTINGS.locations.push(el.value);
+                }
+            });
+            $PI.setSettings(MSETTINGS);
+        }
+
+        function updateLocationTree() {
+            const getLabel = (i) => {
+                return i === 0 ? 'Cities' : '';
+            };
+
+            const isUsed = (zone) => {
+                return MSETTINGS.locations?.includes(zone);
+            };
+
+            const zones = timeLocations.map((zone, i) => {
+                const [state, city] = zone.split("/");
+                return `<div class="sdpi-item" id="${i}">
+                    <div class="sdpi-item-label ${i == 0 ? '' : 'empty'}">${getLabel(i)}</div>
+                        <div class="sdpi-item-value">
+                            <div class="sdpi-item-child">
+                                <input id="${zone}${i}" type="checkbox" ${isUsed(zone) ? 'checked' : ''} value="${zone}" onChange="changed(event)">
+                                <label for="${zone}${i}" class="sdpi-item-label"><span></span>${city.replace('_', ' ')} <smaller>(${state})</smaller></label>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            zones.push(`<div class="sdpi-item">
+                <div class="sdpi-item-label empty"></div>
+                    <div class="sdpi-item-value">
+                        <div class="sdpi-item-child">
+                            <button id="button-inside" class="sdpi-item-value button-inside" onclick="openWindow()">Show more...</button>
+                        </div>
+                    </div>
+               </div>`);
+
+            const zonesEl = document.getElementById('zones');
+            zonesEl.innerHTML = zones.join('');
+        }
+
+        function addTimeLocationIfMissing() {
+            MSETTINGS?.locations?.forEach((location) => {
+                if(!timeLocations.includes(location)) {
+                    timeLocations.unshift(location);
+                }
+            });
+        }
+
+
+
+        $PI.on('connected', (jsn) => {
+
+            MSETTINGS = jsn?.actionInfo?.payload?.settings || {};
+            const longDateAndTimeEl = document.getElementById('longDateAndTime');
+            if(!longDateAndTimeEl) return;
+            longDateAndTimeEl.checked = MSETTINGS.longDateAndTime === true;
+            longDateAndTimeEl.onchange = () => {
+                MSETTINGS.longDateAndTime = longDateAndTimeEl.checked;
+                $PI.setSettings(MSETTINGS);
+            };
+
+            const el = document.getElementById('hour12');
+            if(!el) return;
+            el.checked = MSETTINGS.hour12 === true;
+            el.onchange = () => {
+                MSETTINGS.hour12 = el.checked;
+                $PI.setSettings(MSETTINGS);
+            };
+
+            // see if we have any locations in the settings which are not in our default list
+            addTimeLocationIfMissing();
+
+            // TIME ZONES
+            updateLocationTree();
+
+            // END TIME ZONES
+
+            document.querySelector('.sdpi-wrapper').classList.remove('hidden');
+
+            window.addEventListener("message", (event) => {
+                console.log('***** MESSAGE RECEIVED **** ', event.data, MSETTINGS.locations);
+                if(event.data.event === 'locationChanged') {
+                    let dirty = false;
+                    event.data.locations.forEach((location) => {
+                        if(!timeLocations.includes(location)) {
+                            timeLocations.push(location);
+                        }
+                    });
+                    MSETTINGS.locations = event.data.locations;
+                    updateLocationTree();
+                    $PI.setSettings(MSETTINGS);
+                }
+            }, false);
+
+            // const s = `<optgroup label="Built-in"> ${locations.map((location, i) => {
+            //     const [state, city] = location.split("/");
+            //     if(state !== oldState) {
+            //         `<optgroup label="${state}">`
+            //     }
+            //     return `<option id="loc_${location}${i}" value="${location}">${city} (${state})</option>`
+            // }).join('')}
+
+            // let lastState = '';
+            // const s = `${locations.map((location, i) => {
+            //     const [state, city] = location.split("/");
+            //     const opt = (state !== lastState);
+            //     lastState = state;
+
+            //     if(i > 0 && opt) {
+            //         return `</optgroup><optgroup label="${state}"><option value="${location}">${city} (${state})</option>`;
+            //     }
+            //     return `${opt ? `<optgroup label="${state}">` : ''}<option value="${location}">${city} (${state})</option>`;
+            // }).join('')}</optgroup>`;
+            // const locationsEl = document.getElementById('locations');
+            // locationsEl.innerHTML = s;
+
+
+        });
+
+    </script>
+</body>
+
+</html>
