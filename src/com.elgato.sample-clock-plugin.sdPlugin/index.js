@@ -9,6 +9,19 @@ const MACTIONS = {};
 const minmax = (v = 0, min = 0, max = 100) => Math.min(max, Math.max(min, v));
 const cycle = (idx, min, max) => (idx > max ? min : idx < min ? max : idx);
 const round = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+// make sure to pass in a hex 7char-length color string (e.g. #336699)
+const invertColor = (hexColor) => `#${(Number(`0x1${hexColor.slice(1)}`) ^ 0xFFFFFF).toString(16).slice(1).toUpperCase()}`;
+const isLightColor = (hexColor, ramp = 127) => {
+    const color = +("0x" + hexColor.slice(1).replace(hexColor.length < 5 && /./g, '$&$&'));
+    const [r, g, b] = [color >> 16, color >> 8 & 255, color & 255];  // hex to rgb
+    const hsp = Math.sqrt(0.299 * (r * r) + 0.587 * (g * g) + 0.114 * (b * b)); // HSP see: http://alienryderflex.com/hsp.html
+    return (hsp > ramp);
+};
+const isDarkColor = (hexColor, ramp) => !isLightColor(hexColor, ramp);
+const complementaryColor = (color) => {
+    const tag = (a, b) => (255 - parseInt(color.substring(a, b), 16)).toString(16).slice(-2);
+    return `#${tag(1, 3)}${tag(3, 5)}${tag(5, 7)}`.toUpperCase();
+};
 
 // Action Events
 const sampleClockAction = new Action('com.elgato.sample-clock.action');
@@ -31,8 +44,7 @@ sampleClockAction.onDidReceiveSettings(({context, payload}) => {
 
 sampleClockAction.onTitleParametersDidChange(({context, payload}) => {
     // console.log('onTitleParametersDidChange', context, payload);
-    MACTIONS[context].color = payload.titleParameters.titleColor;
-    MACTIONS[context].ticks = ''; // trigger re-rendering of ticks
+    MACTIONS[context].titleParametersDidChange(payload);
 });
 
 sampleClockAction.onDialPress(({context, payload}) => {
@@ -77,6 +89,10 @@ class SampleClockAction {
         if(!this.settings.hour12) this.settings.hour12 = false;
         if(!this.settings.locations) this.settings.locations = [];
         if(!this.settings.longDateAndTime) this.settings.longDateAndTime = false;
+        if(!this.settings.color) this.settings.color = '#EFEFEF';
+        this.invertedColor = isLightColor(this.color, 120) ? '#0078FF' : invertColor(this.color);
+        this.fontFamily = "Arial, Helvetica, sans-serif";
+
         // default time and date options
         this.timeOptions = {
             short: {hour: '2-digit', minute: '2-digit'},
@@ -87,7 +103,7 @@ class SampleClockAction {
             long: {weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric'}
         };
         this.size = 48; // default size of the icon is 48
-        this.color = '#EFEFEF';
+
         // $SD.setFeedbackLayout(this.context, './action/customlayout.json');
         this.init();
         this.update();
@@ -97,6 +113,18 @@ class SampleClockAction {
         this.interval = setInterval(() => {
             this.update();
         }, 1000);
+    }
+
+    get color() {
+        return this.settings.color;
+    }
+
+    set color(value) {
+        this.settings.color = value;
+        this.invertedColor = isLightColor(value, 120) ? '#0078FF' : invertColor(value);
+        this.ticks = ''; // trigger re-rendering of ticks
+        this.saveSettings();
+        this.update();
     }
 
     get locations() {
@@ -131,7 +159,6 @@ class SampleClockAction {
     }
 
     set hour12(value) {
-        console.log("set hour12", value);
         this.settings.hour12 = value === true;
         this.saveSettings();
     }
@@ -157,6 +184,9 @@ class SampleClockAction {
             dirty = true;
         }
         if(dirty) this.update();
+    }
+    titleParametersDidChange(payload) {
+        this.color = payload.titleParameters.titleColor;
     }
 
     saveSettings() {
@@ -251,15 +281,13 @@ class SampleClockAction {
         };
 
         const timeZone = this.locations[this.mode] || '';
-        const tzOptions = Intl.DateTimeFormat().resolvedOptions();
-        //  console.info('tzOptions', tzOptions);
         const date = timeZone.length ? new Date(new Date().toLocaleString('en-US', {timeZone})) : new Date();
         const hours = date.getHours();
         const minutes = date.getMinutes();
         const seconds = date.getSeconds();
         // if(seconds % 30 == 0) {
         //     logTimeZones(this.locations);
-        //     console.info('tzOptions', tzOptions);
+        //     console.info('timeZoneOptions', Intl.DateTimeFormat().resolvedOptions());
         // }
         const opts = this.longDateAndTime ? this.timeOptions.long : this.timeOptions.short;
         opts.hour12 = this.hour12 === true;
@@ -272,7 +300,8 @@ class SampleClockAction {
             time: date.toLocaleTimeString([], opts),
             date: date.toLocaleDateString([], dateOpts),
             weekday: date.toLocaleDateString([], {weekday: 'long'}),
-            city: isDaylightSaving(date) ? `${cityName} (DST)` : cityName
+            city: isDaylightSaving(date) ? `${cityName} (DST)` : cityName,
+            ampm: hours >= 12 ? 'PM' : 'AM'
         };
         return result;
     }
@@ -293,6 +322,7 @@ class SampleClockAction {
             seconds: round(w / 48),
             center: round(w / 24)
         };
+        const ampm = o.ampm;
         // create ticks only once
         if(!this.ticks.length) {
             const line = `x1="${r}" y1="${lineStart}" x2="${r}" y2="${lineStart + lineLength}"`;
@@ -306,17 +336,18 @@ class SampleClockAction {
             };
             this.ticks = ticks();
         }
+        this.ampm = this.isEncoder ? '' : `<text font-family="${this.fontFamily}" text-anchor="middle" x="${r}" y="${r - 5}" font-size="8" font-weight="800" fill="${this.invertedColor}">${ampm}</text>`;
         // if you prefer not to use a function to create ticks, see below at makeSvgAlt
         return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${w}" viewBox="0 0 ${w} ${w}">
         ${this.ticks}
+        ${this.ampm}
         <g stroke="${this.color}">
             <line id="hours" x1="${r}" y1="${sizes.hours}" x2="${r}" y2="${r}" stroke-width="${strokes.hours}" transform="rotate(${o.hourDeg}, ${r}, ${r})"></line>
             <line id="minutes" x1="${r}" y1="${sizes.minutes}" x2="${r}" y2="${r}" stroke-width="${strokes.minutes}" transform="rotate(${o.minDeg}, ${r}, ${r})"></line>
             ${this.longDateAndTime && `<line id="seconds" x1="${r}" y1="${sizes.seconds}" x2="${r}" y2="${r}" stroke-width="${strokes.seconds}" transform="rotate(${o.secDeg}, ${r}, ${r})"></line>`}
         </g>
-        <circle cx="${r}" cy="${r}" r="${strokes.center}" fill="${this.color}" />
+        <circle cx="${r}" cy="${r}" r="${strokes.center}" fill="${this.color}" />        
     </svg>`;
-
     };
 
 };
@@ -351,3 +382,16 @@ const makeSvgAlt = (o) => {
     </g>
 </svg>`;
 };
+
+
+/*  AM/PM Symbols
+
+<g transform="translate(${r - 7} ${r - 11})">
+    <path id="am" fill="${this.invertedColor}" d="M5.92565918,5.90551758 L4.62854004,5.90551758 L4.11291504,4.56408691 L1.75231934,4.56408691 L1.26489258,5.90551758 L0,5.90551758 L2.3001709,0 L3.56103516,0 L5.92565918,5.90551758 Z M3.73022461,3.5690918 L2.91650391,1.37768555 L2.11889648,3.5690918 L3.73022461,3.5690918 Z M6.54199219,5.90551758 L6.54199219,0 L8.32653809,0 L9.39807129,4.02832031 L10.4575195,0 L12.2460938,0 L12.2460938,5.90551758 L11.1383057,5.90551758 L11.1383057,1.25683594 L9.96606445,5.90551758 L8.81799316,5.90551758 L7.64978027,1.25683594 L7.64978027,5.90551758 L6.54199219,5.90551758 Z"></path>
+</g>
+
+
+<g transform="translate(${r - 7} ${r - 11})">
+     <path id="pm" fill="${this.invertedColor}" d="M0.75,5.90551758 L0.75,0 L4.79846191,0 L4.79846191,0.999023438 L1.94238281,0.999023438 L1.94238281,2.39685059 L4.40771484,2.39685059 L4.40771484,3.39587402 L1.94238281,3.39587402 L1.94238281,5.90551758 L0.75,5.90551758 Z M6,5.90551758 L6,0 L7.7845459,0 L8.8560791,4.02832031 L9.91552734,0 L11.7041016,0 L11.7041016,5.90551758 L10.5963135,5.90551758 L10.5963135,1.25683594 L9.42407227,5.90551758 L8.27600098,5.90551758 L7.10778809,1.25683594 L7.10778809,5.90551758 L6,5.90551758 Z"></path>
+</g>
+*/
