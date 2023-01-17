@@ -67,7 +67,7 @@ const showLocations = (locations) => {
 };
 
 function changed(e) {
-    console.log('changed', e.target.checked, e.target.value);
+    // console.log('changed', e.target.checked, e.target.value);
     if(e.target.checked) {
         addValue(e.target.value);
     } else {
@@ -76,24 +76,26 @@ function changed(e) {
 }
 
 const applyFilter = (e) => {
-    const state = e.target.closest('.state');
-    console.log('apply filter', state, e.target.value);
-    doLoad();
+    // console.log('apply filter', e.target.value);
+    doLoad(e.target.value);
 };
 
-const doLoad = () => {
-    const zoneFilter = document.getElementById('zoneFilter');
+const doLoad = (inFilterValue = undefined) => {
+    let filterValue = inFilterValue;
+    if(!filterValue) {
+        const zoneFilter = document.getElementById('zoneFilter');
+        filterValue = zoneFilter.value;
+    }
     const zonesEl = document.getElementById('zones');
-
-    const filterValue = zoneFilter.value;
-    console.log("doLoad::FILTER", filterValue, settingsProxy, settingsProxy.locations);
+    console.log("doLoad::FILTER", filterValue, settingsProxy, settingsProxy.locations, locations);
     if(settingsProxy.locations.length === 0) {
         settingsProxy.locations = XSETTINGS.locations;
     }
 
     const isUsed = (zone) => settingsProxy.locations?.includes(zone);
     const zoneItem = (zone, i) => {
-        const [state, city] = zone.split("/");
+        let arr = zone.split("/");
+        const [state, city] = arr.length === 2 ? arr : [arr[1], arr[2], ''];  
         return `<div class="sdpi-item" id="${i}">
         <div class="sdpi-item-value">
             <div class="sdpi-item-child">
@@ -103,15 +105,15 @@ const doLoad = () => {
         </div>
     </div>`;
     };
+    console.log('doLoad::MSETTINGS', locations);
 
     const locs = filterValue ? locations.filter((location) => {
         const [state, city] = location.split("/");
-        return city.toLowerCase().includes(filterValue.toLowerCase());
+        return city.toLowerCase().includes(filterValue.toLowerCase()) || city.replace('_', ' ').toLowerCase().includes(filterValue.toLowerCase());
     }) : locations;
 
     if(filterValue) {
         zonesEl.innerHTML = `${locs.map((location, i) => {
-            const [state, city] = location.split("/");
             return `${zoneItem(location, i)}`;
         }).join('')}`;
     } else {
