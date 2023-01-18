@@ -6,10 +6,67 @@
 
     <link rel="stylesheet" href="../../libs/css/sdpi.css">
     <style type="text/css">
-        body,
-        html {
-            background-color: 'red';
+        input[type="color"] {
+            border: none;
+            border-radius: 5px;
+            background: #333;
+            color: #fff;
+            padding: 0px;
+            margin: 0px;
+            margin-right: 3px;
+            min-height: 18px;
+            min-width: 18px;
+            width: 20px;
+            height: 18px;
         }
+
+        input[type="color" i]::-webkit-color-swatch-wrapper {
+            padding: 0px;
+        }
+
+        input[type="color"]+div,
+        input[type="color"]+label {
+            font-size: 9pt;
+            color: var(--sdpi-color);
+            font-weight: normal;
+            margin-left: 8px;
+            -webkit-user-select: none;
+        }
+
+        input[type="color"]+label:after {
+            content: " " !important;
+        }
+
+        input[type="color"]+div {
+            white-space: nowrap;
+            margin-top: 2px;
+        }
+
+
+        .flex {
+            display: flex;
+            flex-direction: row;
+            flex-flow: row wrap;
+            /* align-items: center; */
+            justify-content: flex-start;
+
+        }
+
+        .flex1 {
+            display: flex;
+        }
+
+        .flex>.sdpi-item-child {
+            margin-top: 0px;
+            margin-left: 2px;
+            margin-right: 2px;
+        }
+
+        .flex>.sdpi-item-child.smallcolor {
+            margin-top: 4px;
+            margin-left: 0px;
+        }
+
 
         .zones .sdpi-item {
             margin-top: 0px;
@@ -62,9 +119,9 @@
 <body>
     <div class="sdpi-wrapper hidden">
         <hr />
-        <div type="checkbox" class="sdpi-item" id="multi-items">
+        <div type="xxheckbox" class="sdpi-item" id="multi-items">
             <div class="sdpi-item-label">Settings</div>
-            <div class="sdpi-item-value min100">
+            <div class="sdpi-item-value flex">
                 <div class="sdpi-item-child">
                     <input id="longDateAndTime" type="checkbox">
                     <label for="longDateAndTime" class="sdpi-item-label">
@@ -78,6 +135,21 @@
                         <span></span>AM/PM
                     </label>
                 </div>
+
+                <div class="sdpi-item-child smallcolor">
+                    <div class="flex1">
+                        <input id="color" type="color">
+                        <div>Icon</div>
+                    </div>
+                </div>
+
+                <div class="sdpi-item-child">
+                    <input id="showTicks" type="checkbox">
+                    <label for="showTicks" class="sdpi-item-label">
+                        <span></span>Show Ticks
+                    </label>
+                </div>
+
 
             </div>
         </div>
@@ -141,14 +213,14 @@
         }
 
         function changed(e) {
-            const zonesEl = document.getElementById('zones');
-            MSETTINGS.locations = [];
-            zonesEl.querySelectorAll(`input[type="checkbox"]`).forEach((el) => {
-                if(el.checked) {
-                    MSETTINGS.locations.push(el.value);
-                }
-            });
-            $PI.setSettings(MSETTINGS);
+            // const zonesEl = document.getElementById('zones');
+            // MSETTINGS.locations = [];
+            // zonesEl.querySelectorAll(`input[type="checkbox"]`).forEach((el) => {
+            //     if(el.checked) {
+            //         MSETTINGS.locations.push(el.value);
+            //     }
+            // });
+            // $PI.setSettings(MSETTINGS);
         }
 
         function updateLocationTree() {
@@ -167,7 +239,7 @@
                     <div class="sdpi-item-label ${i == 0 ? '' : 'empty'}">${getLabel(i)}</div>
                         <div class="sdpi-item-value">
                             <div class="sdpi-item-child">
-                                <input id="${zone}${i}" type="checkbox" ${isUsed(zone) ? 'checked' : ''} value="${zone}" onChange="changed(event)">
+                                <input id="${zone}${i}" data-setting="locations" type="checkbox" ${isUsed(zone) ? 'checked' : ''} value="${zone}" onChange="changed(event)">
                                 <label for="${zone}${i}" class="sdpi-item-label"><span></span>${city.replace('_', ' ')} <smaller>(${state})</smaller></label>
                             </div>
                         </div>
@@ -181,7 +253,7 @@
                         </div>
                     </div>
                </div>`);
-               // <button id="city-finder" class="sdpi-item-value insidebutton" onclick="openWindow('city-finder')">Find city...</button>
+            // <button id="city-finder" class="sdpi-item-value insidebutton" onclick="openWindow('city-finder')">Find city...</button>
             const zonesEl = document.getElementById('zones');
             zonesEl.innerHTML = zones.join('');
         }
@@ -194,24 +266,64 @@
             });
         }
 
+        // Remove element from 'fromIndex' and insert the element at toIndex in arr;
+        const moveElementFromTo = (arr, fromIndex, toIndex) => {
+            arr.splice(toIndex, 0, arr.splice(fromIndex, 1)[0]);
+            return arr;
+        };
+
+        const moveToBeginning = (i, arr) => {
+            return moveElementFromTo(arr, i, 0);
+            // OR
+            return arr.unshift(arr.splice(i, 1)[0]);
+        };
+
+        const removeElementFrom = (arr, fromIndex) => {
+            arr.splice(fromIndex, 1);
+            return arr;
+        };
+
+        function adjustLocations() {
+            const resolvedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if(timeLocations.includes(resolvedTimeZone)) {
+                const idx = timeLocations.indexOf(resolvedTimeZone);
+                if(idx > -1) {
+                    return moveElementFromTo(timeLocations, idx, 0);
+                }
+            }
+        }
+
         $PI.on('connected', (jsn) => {
-
+            // see if we have our resolved timezone in our locations - and if yes: move it to the beginning
+            adjustLocations();
             MSETTINGS = jsn?.actionInfo?.payload?.settings || {};
-            const longDateAndTimeEl = document.getElementById('longDateAndTime');
-            if(!longDateAndTimeEl) return;
-            longDateAndTimeEl.checked = MSETTINGS.longDateAndTime === true;
-            longDateAndTimeEl.onchange = () => {
-                MSETTINGS.longDateAndTime = longDateAndTimeEl.checked;
-                $PI.setSettings(MSETTINGS);
-            };
+            console.log('MSETTINGS: ', MSETTINGS);
+            // const longDateAndTimeEl = document.getElementById('longDateAndTime');
+            // if(longDateAndTimeEl) {
+            //     longDateAndTimeEl.checked = MSETTINGS.longDateAndTime === true;
+            //     longDateAndTimeEl.onchange = () => {
+            //         MSETTINGS.longDateAndTime = longDateAndTimeEl.checked;
+            //         $PI.setSettings(MSETTINGS);
+            //     };
+            // }
 
-            const el = document.getElementById('hour12');
-            if(!el) return;
-            el.checked = MSETTINGS.hour12 === true;
-            el.onchange = () => {
-                MSETTINGS.hour12 = el.checked;
-                $PI.setSettings(MSETTINGS);
-            };
+            // const el = document.getElementById('hour12');
+            // if(el) {
+            //     el.checked = MSETTINGS.hour12 === true;
+            //     el.onchange = () => {
+            //         MSETTINGS.hour12 = el.checked;
+            //         $PI.setSettings(MSETTINGS);
+            //     };
+            // }
+
+            // const colorEl = document.getElementById('color');
+            // if(colorEl) {
+            //     colorEl.value = MSETTINGS.color;
+            //     colorEl.onchange = () => {
+            //         MSETTINGS.color = colorEl.value;
+            //         $PI.setSettings(MSETTINGS);
+            //     };
+            // }
 
             // see if we have any locations in the settings which are not in our default list
             addTimeLocationIfMissing();
@@ -221,7 +333,49 @@
 
             // END TIME ZONES
 
+            const changeSetting = (el) => {
+                const setting = el.dataset?.hasOwnProperty('setting') ? el.dataset.setting : el.id;
+                if(!setting) return;
+                if(el.type === 'color') {
+                    MSETTINGS[setting] = el.value;
+                } else if(el.type === 'checkbox') {
+                    if(setting === 'locations') {
+                        if(!MSETTINGS[setting]) MSETTINGS[setting] = [];
+                        if(el.checked) {
+                            if(!MSETTINGS[setting].includes(el.value)) {
+                                MSETTINGS[setting].push(el.value);
+                            }
+                        } else {
+                            const idx = MSETTINGS[setting].indexOf(el.value);
+                            if(idx > -1) {
+                                MSETTINGS[setting].splice(idx, 1);
+                            }
+                        }
+                    } else {
+                        MSETTINGS[setting] = el.checked;
+                    }
+                }
+                console.log('*** changeSetting', setting, MSETTINGS, el.value, el.type, el);
+                console.log(MSETTINGS[setting]);
+                // MSETTINGS.longDateAndTime = longDateAndTimeEl.checked;
+                $PI.setSettings(MSETTINGS);
+            };
+
             document.querySelector('.sdpi-wrapper').classList.remove('hidden');
+            document.querySelectorAll(`input[type="checkbox"], input[type="color"]`).forEach((el) => {
+                // el.checked = MSETTINGS.locations?.includes(el.value);
+                const setting = el.dataset?.hasOwnProperty('setting') ? el.dataset.setting : el.id;
+                if(setting === 'locations') {
+                    if(!MSETTINGS[setting]) MSETTINGS[setting] = [];
+                    el.checked = MSETTINGS[setting].includes(el.value);
+                } else if(setting === 'color') {
+                    el.value = MSETTINGS[setting];
+                } else {
+                    el.checked = MSETTINGS[setting] === true;
+                }
+                console.log(setting, el.dataset.hasOwnProperty('setting') ? el.dataset.setting : `no setting ${el.id}`, el.type, el.value);
+                el.onchange = () => changeSetting(el);
+            });
 
             window.addEventListener("message", (event) => {
                 console.log('***** MESSAGE RECEIVED **** ', event.data, MSETTINGS.locations);
