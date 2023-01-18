@@ -17,9 +17,9 @@
                 "Icon": "action/images/dialstack_background.svg",
                 "StackColor": "#0000FF",
                 "TriggerDescription": {
-                    "Rotate": "Unused",
-                    "Push": "show/hide seconds",
-                    "Touch": "show/hide seconds",
+                    "Rotate": "Next/prev timezone",
+                    "Push": "long/short date/time",
+                    "Touch": "long/short date/time",
                     "LongTouch": "Unused"
                 }
             },
@@ -38,7 +38,7 @@
     "Name": "Clocks",
     "Icon": "pluginIcon",
     "URL": "https://www.elgato.com/gaming/stream-deck",
-    "Version": "0.2.0.05",
+    "Version": "0.2.1.08",
     "OS": [
         {
             "Platform": "mac",
